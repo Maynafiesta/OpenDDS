@@ -46,7 +46,8 @@ This script requires :ref:`deps-perl`.
 
   `Strawberry Perl <https://strawberryperl.com>`__ is recommended for Windows.
 
-  To start the script, open a `Visual Studio Developer Command Prompt <https://learn.microsoft.com/en-us/visualstudio/ide/reference/command-prompt-powershell>`__ that has C++ tools available, then change to the root of the OpenDDS source directory and run:
+  To start the script, open a `Visual Studio Native Tools Command Prompt <https://learn.microsoft.com/en-us/cpp/build/how-to-enable-a-64-bit-visual-cpp-toolset-on-the-command-line>`__
+  or `Developer Command Prompt <https://learn.microsoft.com/en-us/visualstudio/ide/reference/command-prompt-powershell>`__ that has C++ tools available, then change to the root of the OpenDDS source directory and run:
 
   .. code-block:: batch
 
@@ -83,6 +84,8 @@ If configure runs successfully it will end with a message about the next steps f
 .. tab:: Windows
 
   The configure script will say how to open the solution file for OpenDDS in Visual Studio using ``devenv``.
+  Before building, check that the "Configuration" and "Platform" are correct.
+  In Visual Studio, select "Build" and then "Build Solution".
 
   It can also be built directly from the command prompt by using MSBuild.
   For example, if the configure script was ran without any arguments, to do a Debug x64 build:
@@ -245,8 +248,7 @@ It requires :ref:`deps-xerces` and :ref:`deps-openssl`.
 
        .. code-block:: batch
 
-           configure --security --openssl=%NEW_SSL_ROOT% \
-             --xerces3=%NEW_XERCES_ROOT%
+           configure --security --openssl=%NEW_SSL_ROOT% --xerces3=%NEW_XERCES_ROOT%
 
     #. Compile with msbuild (or by opening the solution file in Visual Studio and building from there).
 
@@ -297,7 +299,7 @@ To explicitly enable the feature, use ``feature=1`` above.
 
 .. _building--disabling-the-building-of-built-in-topic-support:
 
-Disabling the Building of Built-In Topic Support
+Disabling the Building of Built-in Topic Support
 ------------------------------------------------
 
 ..
@@ -306,7 +308,7 @@ Disabling the Building of Built-In Topic Support
 Feature Name: ``built_in_topics``
 
 You can reduce the footprint of the core DDS library by up to 30% by disabling Built-in Topic Support.
-See :ref:`bit` for a description of Built-In Topics.
+See :ref:`bit` for a description of built-in topics.
 
 .. _building--disabling-the-building-of-compliance-profile-features:
 
@@ -366,7 +368,7 @@ Persistence Profile
 
 Feature Name: ``persistence_profile``
 
-This profile adds the QoS policy ``DURABILITY_SERVICE`` and the settings ``TRANSIENT`` and ``PERSISTENT`` of the ``DURABILITY`` QoS policy ``kind``.
+This profile adds the :ref:`qos-durability-service` policy and the settings ``TRANSIENT`` and ``PERSISTENT`` of the :ref:`qos-durability` policy ``kind``.
 
 .. _building--ownership-profile:
 
@@ -380,14 +382,14 @@ Feature Name: ``ownership_profile``
 
 This profile adds:
 
-* the setting ``EXCLUSIVE`` of the ``OWNERSHIP`` ``kind``
+* the setting ``EXCLUSIVE`` of :ref:`qos-ownership`
 
-* support for the ``OWNERSHIP_STRENGTH`` policy
+* support for the :ref:`qos-ownership-strength` policy
 
-* setting a ``depth > 1`` for the ``HISTORY`` QoS policy.
+* setting a ``depth > 1`` for the :ref:`qos-history` policy
 
-*Some users may wish to exclude support for the Exclusive OWNERSHIP policy and its associated OWNERSHIP_STRENGTH without impacting use of HISTORY.*
-*In order to support this configuration, OpenDDS also has the MPC feature ownership_kind_exclusive (configure script option --no-ownership-kind-exclusive).*
+Some users may wish to exclude support for the exclusive :ref:`qos-ownership` policy and its associated :ref:`qos-ownership-strength` without impacting use of :ref:`qos-history`.
+In order to support this configuration, OpenDDS also has the MPC feature ``ownership_kind_exclusive`` (configure script option ``--no-ownership-kind-exclusive``).
 
 .. _building--object-model-profile:
 
@@ -399,9 +401,9 @@ Object Model Profile
 
 Feature Name: ``object_model_profile``
 
-This profile includes support for the ``PRESENTATION`` access_scope setting of ``GROUP``.
+This profile includes support for the :ref:`qos-presentation` ``access_scope`` setting of ``GROUP``.
 
-.. note:: Currently, the ``PRESENTATION`` access_scope of ``TOPIC`` is also excluded when ``object_model_profile`` is disabled.
+.. note:: Currently, the :ref:`qos-presentation` ``access_scope`` of ``TOPIC`` is also excluded when ``object_model_profile`` is disabled.
 
 .. _cross_compiling:
 
@@ -569,10 +571,24 @@ Variables
 ---------
 
 Unless otherwise noted, the build features and behavior can be controlled by the OpenDDS Config Package :ref:`cmake-config-vars`.
+
+.. _cmake-building-ace-tao:
+
+ACE/TAO
+^^^^^^^
+
 A prebuilt ACE/TAO can be passed using :cmake:var:`OPENDDS_ACE`.
 In that case :ref:`cmake-feature-vars` will be automatically derived from ACE's ``default.features`` file.
+If :cmake:var:`OPENDDS_ACE` is not passed, then ACE/TAO will be built.
+When building ACE/TAO a release is downloaded by default, but source can also be provided using :cmake:var:`OPENDDS_ACE_TAO_SRC` or cloned using :cmake:var:`OPENDDS_ACE_TAO_GIT`.
+:cmake:var:`OPENDDS_ACE_TAO_KIND` controls what version of ACE/TAO is downloaded for both releases and :cmake:var:`OPENDDS_ACE_TAO_GIT`.
 
-These are the variables that are exclusive to building OpenDDS with CMake:
+.. _cmake-building-vars:
+
+Build-Exclusive CMake Variables
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+These are all the variables that are exclusive to building OpenDDS with CMake:
 
 .. cmake:var:: OPENDDS_JUST_BUILD_HOST_TOOLS
 
@@ -583,7 +599,68 @@ These are the variables that are exclusive to building OpenDDS with CMake:
 .. cmake:var:: OPENDDS_ACE_TAO_SRC
 
   If defined, sets the ACE/TAO to build and use.
-  By default, a hardcoded release is downloaded.
+  A prebuilt ACE/TAO can be provided using :cmake:var:`OPENDDS_ACE`.
+  By default, a hardcoded release depending on :cmake:var:`OPENDDS_ACE_TAO_KIND` is downloaded.
+
+.. cmake:var:: OPENDDS_ACE_TAO_KIND
+
+  The default is ``ace7tao3`` for :ref:`ACE 7/TAO 3 <ace7tao3>`.
+  See :ref:`here <deps-ace-tao>` for other versions of ACE/TAO.
+
+  .. versionadded:: 3.27
+
+.. cmake:var:: OPENDDS_ACE_TAO_GIT
+
+  Implies :cmake:var:`OPENDDS_MPC_GIT`.
+  If true clone ACE/TAO from :cmake:var:`OPENDDS_ACE_TAO_GIT_TAG` at :cmake:var:`OPENDDS_ACE_TAO_GIT_REPO`.
+  By default, a hardcoded release depending on :cmake:var:`OPENDDS_ACE_TAO_KIND` is downloaded.
+
+  .. versionadded:: 3.27
+
+.. cmake:var:: OPENDDS_ACE_TAO_GIT_REPO
+
+  Implies :cmake:var:`OPENDDS_ACE_TAO_GIT`.
+  The Git repository to clone ACE/TAO from.
+  The default is ``https://github.com/DOCGroup/ACE_TAO``.
+
+  .. versionadded:: 3.27
+
+.. cmake:var:: OPENDDS_ACE_TAO_GIT_TAG
+
+  Implies :cmake:var:`OPENDDS_ACE_TAO_GIT`.
+  The Git tag to clone ACE/TAO from.
+  The default depends on :cmake:var:`OPENDDS_ACE_TAO_KIND`.
+
+  .. versionadded:: 3.27
+
+.. cmake:var:: OPENDDS_MPC
+
+  Path to :ref:`deps-mpc`.
+  In most cases this will be provided and automatically detected, unless ACE/TAO was cloned manually and provided using :cmake:var:`OPENDDS_ACE_TAO_SRC`.
+
+  .. versionadded:: 3.26, but documented in 3.27
+
+.. cmake:var:: OPENDDS_MPC_GIT
+
+  If true clone MPC from :cmake:var:`OPENDDS_MPC_GIT_TAG` at :cmake:var:`OPENDDS_MPC_GIT_REPO`.
+
+  .. versionadded:: 3.27
+
+.. cmake:var:: OPENDDS_MPC_GIT_REPO
+
+  Implies :cmake:var:`OPENDDS_MPC_GIT`.
+  The Git repository to clone MPC from.
+  The default is ``https://github.com/DOCGroup/MPC``.
+
+  .. versionadded:: 3.27
+
+.. cmake:var:: OPENDDS_MPC_GIT_TAG
+
+  Implies :cmake:var:`OPENDDS_MPC_GIT`.
+  This is the Git tag to clone MPC from.
+  The default is ``master``.
+
+  .. versionadded:: 3.27
 
 .. cmake:var:: OPENDDS_BUILD_TESTS
 
@@ -597,7 +674,26 @@ These are the variables that are exclusive to building OpenDDS with CMake:
   See :ref:`cmake-running-tests` for how to run them.
   The default for this is ``TRUE``.
 
-Speeding up the build
+.. cmake:var:: OPENDDS_BOOTTIME_TIMERS
+  :no-contents-entry:
+
+  .. versionadded:: 3.28
+
+  OpenDDS uses CLOCK_BOOTTIME when scheduling timers.
+  On some platforms the default is to use CLOCK_MONOTONIC which does not increment when the system is suspended.
+  Enable this option to use CLOCK_BOOTTIME as the timer base clock instead of CLOCK_MONOTONIC.
+  Default is ``OFF``.
+
+.. cmake:var:: OPENDDS_COMPILE_WARNINGS
+
+  If set to ``WARNING``, enables additional compiler warnings when compiling OpenDDS.
+  If set to ``ERROR``, enables additional compiler warnings which are treated as errors when compiling OpenDDS.
+
+  .. versionadded:: 3.28
+
+.. _cmake-building-speed:
+
+Speeding up the Build
 ---------------------
 
 A major speed up supported by all the CMake generators are `unity builds <https://cmake.org/cmake/help/latest/prop_tgt/UNITY_BUILD.html>`__.
@@ -619,7 +715,7 @@ A few things to note:
 
 - Native-built host tools, like :term:`opendds_idl`, have to be configured and built separately and provided to the target build using :cmake:var:`OPENDDS_HOST_TOOLS`.
 - The host tools will build its own ACE/TAO for the host system, but this can be overridden using :cmake:var:`OPENDDS_ACE` on the host build and :cmake:var:`OPENDDS_ACE_TAO_HOST_TOOLS` on the target build.
-- If the target platform isn't automatically supported, then ACE/TAO will have to be :ref:`built serperatly <cmake-ace-tao-manual>`.
+- If the target platform isn't automatically supported, then ACE/TAO will have to be :ref:`built separately <cmake-ace-tao-manual>`.
 
 Android
 ^^^^^^^

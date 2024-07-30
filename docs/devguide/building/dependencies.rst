@@ -49,23 +49,37 @@ ACE/TAO
 
 The DOC Group repository for ACE/TAO is hosted on Github at `DOCGroup/ACE_TAO <https://github.com/DOCGroup/ACE_TAO>`__.
 
-There are two release series of ACE/TAO that are officially supported by OpenDDS:
+These are the versions of ACE/TAO that are officially supported by OpenDDS in this release (|release|):
 
-DOC Group ACE 6.5/TAO 2.5
-  The configure script will download this version (|ace6tao2_version|) by default.
+.. _ace6tao2:
+
+DOC Group :acetaorel:`ace6tao2`
+  The configure script will download this version by default.
+  :ref:`CMake <cmake-building>` will download this version if :cmake:var:`OPENDDS_ACE_TAO_KIND` is set to ``ace6tao``.
 
   Pass ``--ace-github-latest`` to the configure script to clone the ``ace6tao2`` branch of ACE/TAO as is.
   This also clones the ``master`` branch of MPC as is.
+  :ref:`CMake <cmake-building>` will do the same if :cmake:var:`OPENDDS_ACE_TAO_KIND` is set to ``ace6tao`` and :cmake:var:`OPENDDS_ACE_TAO_GIT` is set to ``TRUE``.
 
-DOC Group ACE 7.1/TAO 3.1
-  Pass ``--doc-group3`` to the configure script to download this version (|ace7tao3_version|).
+.. _ace7tao3:
+
+DOC Group :acetaorel:`ace7tao3`
+  Pass ``--doc-group3`` to the configure script to download this version.
+  :ref:`CMake <cmake-building>` will download this version by default.
 
   This version requires a C++14-capable compiler.
 
   Pass ``--ace-github-latest`` to the configure script to clone the ``master`` branch of ACE/TAO as is.
   This also clones the ``master`` branch of MPC as is.
+  :ref:`CMake <cmake-building>` will do the same if :cmake:var:`OPENDDS_ACE_TAO_GIT` is set to ``TRUE``.
 
-Both can also be manually downloaded from https://github.com/DOCGroup/ACE_TAO/releases
+.. _ace8tao4:
+
+DOC Group :acetaorel:`ace8tao4`
+  Pass ``--ace-tao=ace8tao4`` to the configure script to download this version.
+  :ref:`CMake <cmake-building>` will download this version if :cmake:var:`OPENDDS_ACE_TAO_KIND` is set to ``ace8tao4``.
+
+  This version requires a C++17-capable compiler.
 
 .. _deps-ace:
 
@@ -110,7 +124,7 @@ TAO is a C++ CORBA Implementation built on ACE.
 
   - This is the only library which depends on ``TAO_PortableServer``.
 
-The TAO Developer's Guide book can be requested for free from https://objectcomputing.com/products/tao/tao-developers-guide.
+The TAO Developer's Guide book can be requested for free from https://objectcomputing.com/platforms/tao/tao-developers-guide.
 The CORBA Programmers Guide can be downloaded for free from https://www.remedy.nl/opensource/corbapg.html.
 
 .. _deps-optional:
@@ -203,7 +217,7 @@ Xerces
 OpenSSL
 =======
 
-`OpenSSL <https://www.openssl.org/>`__ is used for :ref:`sec` for verifying security configurations and encryption and decryption.
+`OpenSSL <https://www.openssl-library.org/>`__ is used for :ref:`sec` for verifying security configurations and encryption and decryption.
 Versions 1.0, 1.1 and 3.0 (3.0.1 or later) are supported.
 
 .. _deps-python:
@@ -214,7 +228,7 @@ Python
 `Python <https://www.python.org/>`__ is used for some scripts where Perl isn't as suitable.
 Most notably this includes :doc:`this Sphinx-based documentation </internal/docs>` and processing the results of the CMake tests in :ghfile:`tests/auto_run_tests.pl` if ``--cmake`` is passed.
 
-Unless noted otherwise, Python should be version 3.6 or later.
+Unless noted otherwise, Python should be version 3.10 or later.
 
 Because it's an optional dependency, Python should not be required for any script used for building and testing the core functionality of OpenDDS.
 Right now only Perl can be used for situations like that.

@@ -1,10 +1,12 @@
 #include "LocalDiscovery.h"
 
-#include <dds/DCPS/GuidUtils.h>
 #include <dds/DCPS/BuiltInTopicUtils.h>
+#include <dds/DCPS/GuidUtils.h>
+
+#include <dds/OpenDDSConfigWrapper.h>
 
 LocalDiscovery::LocalDiscovery()
-  : Discovery("LocalDiscovery")
+  : Discovery()
 {
   next_topic_id_.entityKey[0] = 0;
   next_topic_id_.entityKey[1] = 0;
@@ -49,7 +51,7 @@ AddDomainStatus LocalDiscovery::add_domain_participant(
   return ads;
 }
 
-#ifdef OPENDDS_SECURITY
+#if OPENDDS_CONFIG_SECURITY
 AddDomainStatus LocalDiscovery::add_domain_participant_secure(
   DDS::DomainId_t,
   const DDS::DomainParticipantQos&,

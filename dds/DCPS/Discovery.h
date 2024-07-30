@@ -6,31 +6,30 @@
 #ifndef OPENDDS_DCPS_DISCOVERY_H
 #define OPENDDS_DCPS_DISCOVERY_H
 
-#include "RcObject.h"
-#include "RcHandle_T.h"
-#include "unique_ptr.h"
-#include "XTypes/TypeObject.h"
-#include "XTypes/TypeLookupService.h"
+#include "ConditionVariable.h"
 #include "DataReaderCallbacks.h"
 #include "DataWriterCallbacks.h"
-#include "TopicCallbacks.h"
-#include "PoolAllocator.h"
 #include "PoolAllocationBase.h"
-#include "ConditionVariable.h"
+#include "PoolAllocator.h"
+#include "RcHandle_T.h"
+#include "RcObject.h"
+#include "TopicCallbacks.h"
+#include "unique_ptr.h"
+
+#include "XTypes/TypeLookupService.h"
+#include "XTypes/TypeObject.h"
 
 #include <dds/DdsDcpsInfoUtilsC.h>
 #include <dds/DdsDcpsSubscriptionC.h>
-#ifdef OPENDDS_SECURITY
+#include <dds/OpenDDSConfigWrapper.h>
+
+#if OPENDDS_CONFIG_SECURITY
 #  include <dds/DdsSecurityCoreC.h>
 #endif
 
 #ifndef ACE_LACKS_PRAGMA_ONCE
 #  pragma once
 #endif
-
-ACE_BEGIN_VERSIONED_NAMESPACE_DECL
-class ACE_Configuration_Heap;
-ACE_END_VERSIONED_NAMESPACE_DECL
 
 OPENDDS_BEGIN_VERSIONED_NAMESPACE_DECL
 
@@ -79,8 +78,6 @@ public:
   /// Probably should just be Discovery::Key
   typedef OPENDDS_STRING RepoKey;
 
-  explicit Discovery(const RepoKey& key) : key_(key) { }
-
   /// Key value for the default repository IOR.
   static const char* DEFAULT_REPO;
   static const char* DEFAULT_RTPS;
@@ -93,14 +90,14 @@ public:
 
   virtual void fini_bit(DCPS::DomainParticipantImpl* participant) = 0;
 
-  RepoKey key() const { return this->key_; }
+  virtual RepoKey key() const = 0;
 
   class OpenDDS_Dcps_Export Config
     : public PoolAllocationBase
     , public EnableContainerSupportedUniquePtr<Config> {
   public:
     virtual ~Config();
-    virtual int discovery_config(ACE_Configuration_Heap& cf) = 0;
+    virtual int discovery_config() = 0;
   };
 
   virtual bool attach_participant(
@@ -114,7 +111,7 @@ public:
     const DDS::DomainParticipantQos& qos,
     XTypes::TypeLookupService_rch tls) = 0;
 
-#if defined(OPENDDS_SECURITY)
+#if OPENDDS_CONFIG_SECURITY
   virtual OpenDDS::DCPS::AddDomainStatus add_domain_participant_secure(
     DDS::DomainId_t domain,
     const DDS::DomainParticipantQos& qos,
@@ -288,9 +285,6 @@ public:
 
 protected:
   DDS::ReturnCode_t create_bit_topics(DomainParticipantImpl* participant);
-
-private:
-  RepoKey key_;
 };
 
 typedef RcHandle<Discovery> Discovery_rch;

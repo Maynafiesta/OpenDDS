@@ -7,27 +7,31 @@
 
 #include "DataReaderImpl.h"
 
-#include "SubscriptionInstance.h"
-#include "ReceivedDataElementList.h"
+#include "DCPS_Utils.h"
 #include "DomainParticipantImpl.h"
-#include "Service_Participant.h"
-#include "Qos_Helper.h"
 #include "FeatureDisabledQosCheck.h"
 #include "GuidConverter.h"
-#include "TopicImpl.h"
-#include "Serializer.h"
-#include "SubscriberImpl.h"
-#include "Transient_Kludge.h"
-#include "Util.h"
-#include "DCPS_Utils.h"
+#include "MonitorFactory.h"
+#include "Qos_Helper.h"
 #include "QueryConditionImpl.h"
 #include "ReadConditionImpl.h"
-#include "MonitorFactory.h"
+#include "ReceivedDataElementList.h"
+#include "SafetyProfileStreams.h"
+#include "Serializer.h"
+#include "Service_Participant.h"
+#include "SubscriberImpl.h"
+#include "SubscriptionInstance.h"
+#include "TopicImpl.h"
+#include "Transient_Kludge.h"
+#include "TypeSupportImpl.h"
+#include "Util.h"
+
 #include "transport/framework/EntryExit.h"
 #include "transport/framework/TransportExceptions.h"
-#include "SafetyProfileStreams.h"
-#include "TypeSupportImpl.h"
+
 #include "XTypes/TypeObject.h"
+
+#include <dds/OpenDDSConfigWrapper.h>
 #ifndef DDS_HAS_MINIMUM_BIT
 #  include "BuiltInTopicUtils.h"
 #endif
@@ -339,8 +343,10 @@ DataReaderImpl::add_association(const WriterAssociation& writer,
   } else {
     if (DCPS_debug_level) {
       ACE_ERROR((LM_ERROR,
-          ACE_TEXT("(%P|%t) DataReaderImpl::add_association: ")
-          ACE_TEXT("ERROR: transport layer failed to associate.\n")));
+                 ACE_TEXT("(%P|%t) DataReaderImpl::add_association: ")
+                 ACE_TEXT("ERROR: transport layer failed to associate local reader %C remote writer %C\n"),
+                 LogGuid(get_guid()).c_str(),
+                 LogGuid(writer.writerId).c_str()));
     }
   }
 }
@@ -351,9 +357,10 @@ DataReaderImpl::transport_assoc_done(int flags, const GUID_t& remote_id)
   if (!(flags & ASSOC_OK)) {
     if (DCPS_debug_level) {
       ACE_ERROR((LM_ERROR,
-          ACE_TEXT("(%P|%t) DataReaderImpl::transport_assoc_done: ")
-          ACE_TEXT("ERROR: transport layer failed to associate %C\n"),
-          LogGuid(remote_id).c_str()));
+                 ACE_TEXT("(%P|%t) DataReaderImpl::transport_assoc_done: ")
+                 ACE_TEXT("ERROR: transport layer failed to associate local reader %C remote writer %C\n"),
+                 LogGuid(get_guid()).c_str(),
+                 LogGuid(remote_id).c_str()));
     }
     return;
   }
@@ -1205,7 +1212,7 @@ DataReaderImpl::enable()
   if (topic_servant_ && !transport_disabled_) {
     try {
       this->enable_transport(this->qos_.reliability.kind == DDS::RELIABLE_RELIABILITY_QOS,
-          this->qos_.durability.kind > DDS::VOLATILE_DURABILITY_QOS);
+                             this->qos_.durability.kind > DDS::VOLATILE_DURABILITY_QOS, participant.get());
     } catch (const Transport::Exception&) {
       ACE_ERROR((LM_ERROR,
           ACE_TEXT("(%P|%t) ERROR: DataReaderImpl::enable, ")
@@ -1264,7 +1271,7 @@ DataReaderImpl::enable()
                               exprParams,
                               type_info);
 
-#if defined(OPENDDS_SECURITY)
+#if OPENDDS_CONFIG_SECURITY
     {
       ACE_GUARD_RETURN(ACE_Recursive_Thread_Mutex, guard, sample_lock_, DDS::RETCODE_ERROR);
       security_config_ = participant->get_security_config();
@@ -1938,6 +1945,23 @@ DataReaderImpl::release_instance(DDS::InstanceHandle_t handle)
     ACE_GUARD(ACE_Recursive_Thread_Mutex, instance_guard, instances_lock_);
     instances_.erase(handle);
   }
+
+#ifndef OPENDDS_NO_OWNERSHIP_KIND_EXCLUSIVE
+  if (this->is_exclusive_ownership_ && instance->instance_state_->is_exclusive()) {
+    DataReaderImpl::OwnershipManagerPtr owner_manager = ownership_manager();
+    if (owner_manager) {
+      owner_manager->remove_writers(instance->instance_handle_);
+    }
+
+    for (RepoIdSet::const_iterator pos = instance->instance_state_->writers_begin(),
+           limit = instance->instance_state_->writers_end(); pos != limit; ++pos) {
+      WriterMapType::iterator iter = writers_.find(*pos);
+      if (iter != writers_.end()) {
+        iter->second->remove_instance(instance->instance_handle_);
+      }
+    }
+  }
+#endif
 
   this->release_instance_i(handle);
   if (this->monitor_) {
@@ -3211,15 +3235,8 @@ DataReaderImpl::add_link(const DataLink_rch& link, const GUID_t& peer)
     }
   }
   TransportClient::add_link(link, peer);
-  OPENDDS_STRING type;
-  {
-    TransportImpl_rch impl = link->impl();
-    if (impl) {
-      type = impl->transport_type();
-    }
-  }
 
-  if (type == "rtps_udp" || type == "multicast") {
+  if (!link->uses_end_historic_control_messages()) {
     resume_sample_processing(peer);
   }
 }
@@ -3374,7 +3391,7 @@ void DataReaderImpl::accept_sample_processing(const SubscriptionInstance_rch& in
   }
 }
 
-#if defined(OPENDDS_SECURITY)
+#if OPENDDS_CONFIG_SECURITY
 DDS::Security::ParticipantCryptoHandle DataReaderImpl::get_crypto_handle() const
 {
   RcHandle<DomainParticipantImpl> participant = participant_servant_.lock();
@@ -3387,9 +3404,6 @@ EndHistoricSamplesMissedSweeper::EndHistoricSamplesMissedSweeper(ACE_Reactor* re
                                                                  DataReaderImpl* reader)
   : ReactorInterceptor (reactor, owner)
   , reader_(*reader)
-{ }
-
-EndHistoricSamplesMissedSweeper::~EndHistoricSamplesMissedSweeper()
 { }
 
 void EndHistoricSamplesMissedSweeper::schedule_timer(OpenDDS::DCPS::RcHandle<OpenDDS::DCPS::WriterInfo>& info)
@@ -3456,7 +3470,8 @@ void EndHistoricSamplesMissedSweeper::CancelCommand::execute()
 
 void DataReaderImpl::transport_discovery_change()
 {
-  populate_connection_info();
+  RcHandle<DomainParticipantImpl> participant = participant_servant_.lock();
+  populate_connection_info(participant.get());
   const TransportLocatorSeq& trans_conf_info = connection_info();
   const GUID_t dp_id_copy = dp_id_;
   Discovery_rch disco = TheServiceParticipant->get_discovery(domain_id_);

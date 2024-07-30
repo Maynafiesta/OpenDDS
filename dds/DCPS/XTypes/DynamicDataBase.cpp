@@ -27,9 +27,11 @@ using DCPS::retcode_to_string;
 namespace {
   DDS::TypeDescriptor_var get_type_desc(DDS::DynamicType_ptr type)
   {
-    if (!type && log_level >= LogLevel::Warning) {
-      ACE_ERROR((LM_WARNING, "(%P|%t) WARNING: DynamicDataBase: "
-        "Passed null DynamicType pointer\n"));
+    if (!type) {
+      if (log_level >= LogLevel::Warning) {
+        ACE_ERROR((LM_WARNING, "(%P|%t) WARNING: DynamicDataBase: "
+                   "Passed null DynamicType pointer\n"));
+      }
       return DDS::TypeDescriptor_var();
     }
     DDS::TypeDescriptor_var td;
@@ -299,51 +301,6 @@ DDS::MemberId DynamicDataBase::get_union_default_member(DDS::DynamicType* type)
   return default_branch;
 }
 
-DDS::ReturnCode_t DynamicDataBase::get_selected_union_branch(DDS::Int32 disc,
-  bool& found_selected_member, DDS::MemberDescriptor_var& selected_md) const
-{
-  found_selected_member = false;
-  bool has_default = false;
-  DDS::ReturnCode_t rc = DDS::RETCODE_OK;
-  DDS::MemberDescriptor_var default_md;
-  for (DDS::UInt32 i = 0; i < type_->get_member_count(); ++i) {
-    DDS::DynamicTypeMember_var dtm;
-    rc = type_->get_member_by_index(dtm, i);
-    if (rc != DDS::RETCODE_OK) {
-      return rc;
-    }
-    if (dtm->get_id() == DISCRIMINATOR_ID) {
-      continue;
-    }
-    DDS::MemberDescriptor_var md;
-    rc = dtm->get_descriptor(md);
-    if (rc != DDS::RETCODE_OK) {
-      return rc;
-    }
-    bool found_matched_label = false;
-    const DDS::UnionCaseLabelSeq labels = md->label();
-    for (DDS::UInt32 j = 0; !found_matched_label && j < labels.length(); ++j) {
-      if (disc == labels[j]) {
-        found_matched_label = true;
-      }
-    }
-    if (found_matched_label) {
-      selected_md = md;
-      found_selected_member = true;
-      break;
-    }
-    if (md->is_default_label()) {
-      default_md = md;
-      has_default = true;
-    }
-  }
-  if (!found_selected_member && has_default) {
-    selected_md = default_md;
-    found_selected_member = true;
-  }
-  return rc;
-}
-
 DDS::ReturnCode_t DynamicDataBase::get_selected_union_branch(
   bool& found_selected_member, DDS::MemberDescriptor_var& selected_md)
 {
@@ -360,14 +317,15 @@ DDS::ReturnCode_t DynamicDataBase::get_selected_union_branch(
     }
     return DDS::RETCODE_ERROR;
   }
-  return get_selected_union_branch(static_cast<DDS::Int32>(i64_disc), found_selected_member, selected_md);
+  return XTypes::get_selected_union_branch(type_, static_cast<DDS::Int32>(i64_disc),
+                                           found_selected_member, selected_md);
 }
 
 bool DynamicDataBase::discriminator_selects_no_member(DDS::Int32 disc) const
 {
   bool found_selected_member;
   DDS::MemberDescriptor_var selected_md;
-  const DDS::ReturnCode_t rc = get_selected_union_branch(disc, found_selected_member, selected_md);
+  const DDS::ReturnCode_t rc = XTypes::get_selected_union_branch(type_, disc, found_selected_member, selected_md);
   if (rc != DDS::RETCODE_OK) {
     if (log_level >= LogLevel::Warning) {
       ACE_ERROR((LM_WARNING, "(%P|%t) WARNING: DynamicDataBase::discriminator_selects_no_member: "
@@ -376,37 +334,6 @@ bool DynamicDataBase::discriminator_selects_no_member(DDS::Int32 disc) const
     return false;
   }
   return !found_selected_member;
-}
-
-bool DynamicDataBase::has_explicit_keys(DDS::DynamicType* dt)
-{
-  // see dds_generator.h struct_has_explicit_keys() in opendds_idl
-  DDS::TypeDescriptor_var type_descriptor;
-  DDS::ReturnCode_t ret = dt->get_descriptor(type_descriptor);
-  if (ret != DDS::RETCODE_OK) {
-    return false;
-  }
-  DDS::DynamicType* const base = type_descriptor->base_type();
-  if (base && has_explicit_keys(base)) {
-    return true;
-  }
-
-  for (ACE_CDR::ULong i = 0; i < dt->get_member_count(); ++i) {
-    DDS::DynamicTypeMember_var member;
-    ret = dt->get_member_by_index(member, i);
-    if (ret != DDS::RETCODE_OK) {
-      return false;
-    }
-    DDS::MemberDescriptor_var descriptor;
-    ret = member->get_descriptor(descriptor);
-    if (ret != DDS::RETCODE_OK) {
-      return false;
-    }
-    if (descriptor->is_key()) {
-      return true;
-    }
-  }
-  return false;
 }
 
 DDS::ReturnCode_t DynamicDataBase::unsupported_method(const char* method_name, bool warning) const
@@ -419,9 +346,94 @@ DDS::ReturnCode_t DynamicDataBase::unsupported_method(const char* method_name, b
 }
 
 #ifndef OPENDDS_NO_CONTENT_SUBSCRIPTION_PROFILE
-DDS::ReturnCode_t DynamicDataBase::get_simple_value(DCPS::Value& /*value*/, DDS::MemberId /*id*/)
+namespace {
+  template <typename T>
+  DDS::ReturnCode_t get_some_value(DCPS::Value& value, DDS::MemberId id, DDS::DynamicData& dyn,
+                                   DDS::ReturnCode_t (DDS::DynamicData::* pmf)(T&, DDS::MemberId))
+  {
+    T v;
+    const DDS::ReturnCode_t ret = (dyn.*pmf)(v, id);
+    if (ret == DDS::RETCODE_OK) {
+      value = v;
+    }
+    return ret;
+  }
+
+  DDS::ReturnCode_t get_some_value(DCPS::Value& value, DDS::MemberId id, DDS::DynamicData& dyn,
+                                   DDS::ReturnCode_t (DDS::DynamicData::* pmf)(char*&, DDS::MemberId))
+  {
+    CORBA::String_var v;
+    const DDS::ReturnCode_t ret = (dyn.*pmf)(v, id);
+    if (ret == DDS::RETCODE_OK) {
+      value = v.in();
+    }
+    return ret;
+  }
+
+  DDS::ReturnCode_t get_some_value(DCPS::Value& value, DDS::MemberId id, DDS::DynamicData& dyn,
+                                   DDS::ReturnCode_t (DDS::DynamicData::* pmf)(ACE_CDR::WChar*&, DDS::MemberId))
+  {
+    CORBA::WString_var v;
+    const DDS::ReturnCode_t ret = (dyn.*pmf)(v, id);
+    if (ret == DDS::RETCODE_OK) {
+      value = v.in();
+    }
+    return ret;
+  }
+}
+
+DDS::ReturnCode_t DynamicDataBase::get_simple_value(DCPS::Value& value, DDS::MemberId id)
 {
-  return unsupported_method("DynamicDataBase::get_simple_value");
+  DDS::DynamicType_var member_type;
+  DDS::ReturnCode_t rc = get_member_type(member_type, type_, id);
+  if (rc != DDS::RETCODE_OK) {
+    return rc;
+  }
+  const TypeKind member_kind = member_type->get_kind();
+  switch (member_kind) {
+  case TK_BOOLEAN:
+    return get_some_value(value, id, *this, &DDS::DynamicData::get_boolean_value);
+  case TK_BYTE:
+    return get_some_value(value, id, *this, &DDS::DynamicData::get_byte_value);
+  case TK_INT8:
+    return get_some_value(value, id, *this, &DDS::DynamicData::get_int8_value);
+  case TK_INT16:
+    return get_some_value(value, id, *this, &DDS::DynamicData::get_int16_value);
+  case TK_INT32:
+    return get_some_value(value, id, *this, &DDS::DynamicData::get_int32_value);
+  case TK_INT64:
+    return get_some_value(value, id, *this, &DDS::DynamicData::get_int64_value);
+  case TK_UINT8:
+    return get_some_value(value, id, *this, &DDS::DynamicData::get_uint8_value);
+  case TK_UINT16:
+    return get_some_value(value, id, *this, &DDS::DynamicData::get_uint16_value);
+  case TK_UINT32:
+    return get_some_value(value, id, *this, &DDS::DynamicData::get_uint32_value);
+  case TK_UINT64:
+    return get_some_value(value, id, *this, &DDS::DynamicData::get_uint64_value);
+  case TK_FLOAT32:
+    return get_some_value(value, id, *this, &DDS::DynamicData::get_float32_value);
+  case TK_FLOAT64:
+    return get_some_value(value, id, *this, &DDS::DynamicData::get_float64_value);
+  case TK_FLOAT128:
+    return get_some_value(value, id, *this, &DDS::DynamicData::get_float128_value);
+  case TK_CHAR8:
+    return get_some_value(value, id, *this, &DDS::DynamicData::get_char8_value);
+  case TK_CHAR16:
+    return get_some_value(value, id, *this, &DDS::DynamicData::get_char16_value);
+  case TK_ENUM:
+  case TK_STRING8:
+    return get_some_value(value, id, *this, &DDS::DynamicData::get_string_value);
+  case TK_STRING16:
+    return get_some_value(value, id, *this, &DDS::DynamicData::get_wstring_value);
+  default:
+    if (log_level >= LogLevel::Notice) {
+      ACE_ERROR((LM_NOTICE, "(%P|%t) NOTICE: DynamicDataBase::get_simple_value: "
+                 "Member type %C is not supported by DCPS::Value\n",
+                 typekind_to_string(member_kind)));
+    }
+  }
+  return DDS::RETCODE_ERROR;
 }
 #endif
 

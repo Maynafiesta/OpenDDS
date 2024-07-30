@@ -6,15 +6,17 @@
 #ifndef OPENDDS_DCPS_STATICDISCOVERY_H
 #define OPENDDS_DCPS_STATICDISCOVERY_H
 
-#include "WaitSet.h"
-#include "PoolAllocator.h"
-#include "TopicDetails.h"
-#include "SporadicTask.h"
+#include "BuiltInTopicDataReaderImpls.h"
+#include "DCPS_Utils.h"
 #include "GuidUtils.h"
 #include "Marked_Default_Qos.h"
-#include "DCPS_Utils.h"
-#include "BuiltInTopicDataReaderImpls.h"
+#include "PoolAllocator.h"
+#include "SporadicTask.h"
+#include "TopicDetails.h"
+#include "WaitSet.h"
 #include "dcps_export.h"
+
+#include <dds/OpenDDSConfigWrapper.h>
 
 #include <ace/Configuration.h>
 
@@ -439,6 +441,7 @@ private:
   bool has_dcps_key(const GUID_t& topicId) const;
 
   ACE_Thread_Mutex& lock_;
+  const Discovery::RepoKey key_;
   GUID_t participant_id_;
   RepoIdSet ignored_guids_;
   unsigned int topic_counter_;
@@ -862,7 +865,9 @@ class OpenDDS_Dcps_Export StaticDiscovery : public Discovery {
 public:
   explicit StaticDiscovery(const RepoKey& key);
 
-  int load_configuration(ACE_Configuration_Heap& config);
+  RepoKey key() const { return key_; }
+
+  int load_configuration();
 
   virtual GUID_t generate_participant_guid();
 
@@ -870,7 +875,7 @@ public:
                                                  const DDS::DomainParticipantQos& qos,
                                                  XTypes::TypeLookupService_rch tls);
 
-#if defined(OPENDDS_SECURITY)
+#if OPENDDS_CONFIG_SECURITY
   virtual AddDomainStatus add_domain_participant_secure(
     DDS::DomainId_t domain,
     const DDS::DomainParticipantQos& qos,
@@ -1004,18 +1009,19 @@ private:
                      SubscriberImpl* sub,
                      const DDS::DataReaderQos& qos);
 
-  int parse_topics(ACE_Configuration_Heap& cf);
-  int parse_datawriterqos(ACE_Configuration_Heap& cf);
-  int parse_datareaderqos(ACE_Configuration_Heap& cf);
-  int parse_publisherqos(ACE_Configuration_Heap& cf);
-  int parse_subscriberqos(ACE_Configuration_Heap& cf);
-  int parse_endpoints(ACE_Configuration_Heap& cf);
+  int parse_topics();
+  int parse_datawriterqos();
+  int parse_datareaderqos();
+  int parse_publisherqos();
+  int parse_subscriberqos();
+  int parse_endpoints();
 
   void pre_writer(DataWriterImpl* writer);
   void pre_reader(DataReaderImpl* reader);
 
   static StaticDiscovery_rch instance_;
 
+  const RepoKey key_;
   mutable ACE_Thread_Mutex lock_;
 
   DomainParticipantMap participants_;

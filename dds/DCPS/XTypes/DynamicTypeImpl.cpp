@@ -199,9 +199,6 @@ bool test_equality(DDS::DynamicType_ptr lhs, DDS::DynamicType_ptr rhs, DynamicTy
     return true;
   }
 
-  OPENDDS_ASSERT(lhs);
-  OPENDDS_ASSERT(rhs);
-
   if (lhs == 0 || rhs == 0) {
     return false;
   }

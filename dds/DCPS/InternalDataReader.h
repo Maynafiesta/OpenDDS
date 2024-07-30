@@ -56,6 +56,7 @@ inline DDS::SampleInfo make_sample_info(DDS::SampleStateKind sample_state,
   si.generation_rank = generation_rank;
   si.absolute_generation_rank = absolute_generation_rank;
   si.valid_data = valid_data;
+  si.opendds_reserved_publication_seq = 0;
   return si;
 }
 
@@ -98,7 +99,7 @@ public:
   typedef RcHandle<InternalDataReaderListener<T> > Listener_rch;
   typedef WeakRcHandle<InternalDataReaderListener<T> > Listener_wrch;
 
-  explicit InternalDataReader(const DDS::DataReaderQos qos,
+  explicit InternalDataReader(const DDS::DataReaderQos& qos,
                               Listener_rch listener = Listener_rch())
     : qos_(qos)
     , listener_(listener)
@@ -194,6 +195,18 @@ public:
   {
     ACE_GUARD_RETURN(ACE_Thread_Mutex, g, mutex_, Listener_rch());
     return listener_.lock();
+  }
+
+  void set_interesting_instances(const SampleSequence& instances)
+  {
+    ACE_GUARD(ACE_Thread_Mutex, g, mutex_);
+    interesting_instances_ = instances;
+  }
+
+  const SampleSequence& get_interesting_instances() const
+  {
+    ACE_GUARD_RETURN(ACE_Thread_Mutex, g, mutex_, interesting_instances_);
+    return interesting_instances_;
   }
 
   void read(SampleSequence& samples,
@@ -294,6 +307,8 @@ private:
   // destroyed.
   Listener_wrch listener_;
 
+  SampleSequence interesting_instances_;
+
   typedef OPENDDS_SET(InternalEntity_wrch) PublicationSet;
 
   class Instance {
@@ -325,7 +340,7 @@ private:
     {
       if (instance_state_ == DDS::NOT_ALIVE_DISPOSED_INSTANCE_STATE &&
           !is_infinite(qos.reader_data_lifecycle.autopurge_disposed_samples_delay) &&
-          SystemTimePoint::now().to_dds_time() > disposed_expiration_date_) {
+          SystemTimePoint::now().to_idl_struct() > disposed_expiration_date_) {
         not_read_samples_.clear();
         read_samples_.clear();
       }
@@ -342,7 +357,7 @@ private:
 
       if (instance_state_ == DDS::NOT_ALIVE_NO_WRITERS_INSTANCE_STATE &&
           !is_infinite(qos.reader_data_lifecycle.autopurge_nowriter_samples_delay) &&
-          SystemTimePoint::now().to_dds_time() > no_writers_expiration_date_) {
+          SystemTimePoint::now().to_idl_struct() > no_writers_expiration_date_) {
         return true;
       }
 
@@ -494,9 +509,9 @@ private:
     {
       publication_set_.insert(publication_handle);
 
-      if (instance_state_ != DDS::NOT_ALIVE_DISPOSED_INSTANCE_STATE) {
+      if (instance_state_ == DDS::ALIVE_INSTANCE_STATE) {
         instance_state_ = DDS::NOT_ALIVE_DISPOSED_INSTANCE_STATE;
-        disposed_expiration_date_ = SystemTimePoint::now().to_dds_time() + qos.reader_data_lifecycle.autopurge_disposed_samples_delay;
+        disposed_expiration_date_ = SystemTimePoint::now().to_idl_struct() + qos.reader_data_lifecycle.autopurge_disposed_samples_delay;
         informed_of_not_alive_ = false;
         return true;
       }
@@ -511,7 +526,7 @@ private:
 
       if (publication_set_.empty() && instance_state_ == DDS::ALIVE_INSTANCE_STATE) {
         instance_state_ = DDS::NOT_ALIVE_NO_WRITERS_INSTANCE_STATE;
-        no_writers_expiration_date_ = SystemTimePoint::now().to_dds_time() + qos.reader_data_lifecycle.autopurge_nowriter_samples_delay;
+        no_writers_expiration_date_ = SystemTimePoint::now().to_idl_struct() + qos.reader_data_lifecycle.autopurge_nowriter_samples_delay;
         informed_of_not_alive_ = false;
         return true;
       }

@@ -171,6 +171,19 @@ def ghrelease_role(name, rawtext, text, lineno, inliner, options={}, content=[])
     return ([node], [])
 
 
+def acetaorel_role(name, rawtext, text, lineno, inliner, options={}, content=[]):
+    config = get_config(inliner)
+    info = vars(config.opendds_version_info)
+    explicit_title, title, target = process_title_target(text)
+    if not explicit_title:
+        ace_ver = info[target + '_version']
+        parts = ace_ver.split('.')
+        tao_ver = '.'.join([str(int(parts[0]) - 4)] + parts[1:3])
+        title = f'ACE {ace_ver}/TAO {tao_ver}'
+    return link_node(rawtext, lineno, inliner,
+        title, explicit_title, info[target + '_url'], options)
+
+
 def omgissue_role(name, rawtext, text, lineno, inliner, options={}, content=[]):
     explicit_title, title, target = process_title_target(
         text, 'OMG Issue {}'.format(text))
@@ -245,7 +258,10 @@ def add_omg_spec(app, slug, version, our_name=None, display_name=None):
             if kind == fitz.LINK_GOTO:
                 loc = 'page={}&view=FitH,{}'.format(page, dest['to'].y)
             elif kind == fitz.LINK_NAMED:
-                loc = dest['name']
+                if 'name' in dest:
+                    loc = dest['name']
+                else:
+                    loc = dest['nameddest']
             else:
                 continue
 
@@ -359,7 +375,7 @@ class OmgSpecsDirective(SphinxDirective):
             p += nodes.literal('', spec_name)
             p += nodes.inline('', ')')
             spec_node += p
-            if 'debug-links' in self.options:
+            if 'debug-links' in self.options and not self.env.app.config.gen_all_omg_spec_links:
                 self.spec_sections(spec, spec_node, spec['sections'])
             specs_node += spec_node
         return [specs_node]
@@ -375,7 +391,11 @@ def setup(app):
     app.add_role('ghpr', ghpr_role)
     app.add_role('ghrelease', ghrelease_role)
 
+    app.add_config_value('opendds_version_info', None, 'env')
+    app.add_role('acetaorel', acetaorel_role)
+
     app.add_config_value('omg_specs', {}, 'env', types=[dict])
+    app.add_config_value('gen_all_omg_spec_links', True, 'env', types=[bool])
     app.add_role('omgissue', omgissue_role)
     app.add_role('omgspec', omgspec_role)
     app.add_directive("omgspecs", OmgSpecsDirective)

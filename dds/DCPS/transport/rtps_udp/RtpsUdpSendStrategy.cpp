@@ -11,11 +11,15 @@
 #include "RtpsUdpTransport.h"
 
 #include <dds/DdsDcpsGuidTypeSupportImpl.h>
+#include <dds/OpenDDSConfigWrapper.h>
+
 #include <dds/DCPS/LogAddr.h>
 #include <dds/DCPS/Serializer.h>
+
 #include <dds/DCPS/RTPS/MessageUtils.h>
 #include <dds/DCPS/RTPS/MessageParser.h>
 #include <dds/DCPS/RTPS/RtpsCoreTypeSupportImpl.h>
+
 #include <dds/DCPS/transport/framework/NullSynchStrategy.h>
 #include <dds/DCPS/transport/framework/TransportCustomizedElement.h>
 #include <dds/DCPS/transport/framework/TransportSendElement.h>
@@ -101,7 +105,7 @@ RtpsUdpSendStrategy::send_bytes_i_helper(const iovec iov[], int n)
     return -1;
   }
 
-  AddrSet addrs;
+  NetworkAddressSet addrs;
   if (elem->subscription_id() != GUID_UNKNOWN) {
     addrs = link_->get_addresses(elem->publication_id(), elem->subscription_id());
 
@@ -128,7 +132,7 @@ RtpsUdpSendStrategy::override_destinations(const NetworkAddress& destination)
 }
 
 RtpsUdpSendStrategy::OverrideToken
-RtpsUdpSendStrategy::override_destinations(const AddrSet& dest)
+RtpsUdpSendStrategy::override_destinations(const NetworkAddressSet& dest)
 {
   override_dest_ = &dest;
   return OverrideToken(this);
@@ -170,7 +174,7 @@ RtpsUdpSendStrategy::send_rtps_control(RTPS::Message& message,
 
   const AMB_Continuation cont(rtps_header_mb_lock_, rtps_header_mb_, submessages);
 
-#ifdef OPENDDS_SECURITY
+#if OPENDDS_CONFIG_SECURITY
   Message_Block_Ptr alternate;
   if (security_config()) {
     const DDS::Security::CryptoTransform_var crypto = link_->security_config()->get_crypto_transform();
@@ -201,7 +205,7 @@ RtpsUdpSendStrategy::send_rtps_control(RTPS::Message& message,
 void
 RtpsUdpSendStrategy::send_rtps_control(RTPS::Message& message,
                                        ACE_Message_Block& submessages,
-                                       const AddrSet& addrs)
+                                       const NetworkAddressSet& addrs)
 {
   {
     ACE_GUARD(ACE_Thread_Mutex, g, rtps_message_mutex_);
@@ -210,7 +214,7 @@ RtpsUdpSendStrategy::send_rtps_control(RTPS::Message& message,
 
   const AMB_Continuation cont(rtps_header_mb_lock_, rtps_header_mb_, submessages);
 
-#ifdef OPENDDS_SECURITY
+#if OPENDDS_CONFIG_SECURITY
   Message_Block_Ptr alternate;
   if (security_config()) {
     const DDS::Security::CryptoTransform_var crypto = link_->security_config()->get_crypto_transform();
@@ -249,10 +253,10 @@ RtpsUdpSendStrategy::append_submessages(const RTPS::SubmessageSeq& submessages)
 
 ssize_t
 RtpsUdpSendStrategy::send_multi_i(const iovec iov[], int n,
-                                  const AddrSet& addrs)
+                                  const NetworkAddressSet& addrs)
 {
   ssize_t result = -1;
-  typedef AddrSet::const_iterator iter_t;
+  typedef NetworkAddressSet::const_iterator iter_t;
   for (iter_t iter = addrs.begin(); iter != addrs.end(); ++iter) {
     if (!*iter) {
       continue;
@@ -348,7 +352,7 @@ RtpsUdpSendStrategy::add_delayed_notification(TransportQueueElement* element)
   }
 }
 
-#ifdef OPENDDS_SECURITY
+#if OPENDDS_CONFIG_SECURITY
 namespace {
   DDS::OctetSeq toSeq(const ACE_Message_Block* mb)
   {
@@ -788,7 +792,7 @@ size_t RtpsUdpSendStrategy::max_message_size() const
 {
   // TODO: Make this conditional on if the message actually needs to do this.
   return max_message_size_
-#ifdef OPENDDS_SECURITY
+#if OPENDDS_CONFIG_SECURITY
     // Worst case scenario is full message encryption plus one submessage encryption.
     - MaxSecureSubmessageAdditionalSize - MaxSecureFullMessageAdditionalSize
 #endif
